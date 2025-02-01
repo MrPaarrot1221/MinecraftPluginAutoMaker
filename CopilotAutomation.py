@@ -311,71 +311,69 @@ class CopilotAutomation:
         except Exception as e:
             print(f"Error waiting for page load: {e}")
             return False
-
     def send_prompt_to_chat(self, input_field, prompt: str) -> bool:
         """Send a prompt to Copilot chat and wait for the complete response"""
         max_attempts = 3
         for attempt in range(max_attempts):
             try:
-                # Refresh the input field element with extended wait time
+                # First, check if we're in an existing chat or need to start a new one
+                try:
+                    # Look for the "New chat" button to determine if we're in an active chat
+                    new_chat_buttons = self.browser.find_elements(By.CSS_SELECTOR, "button[aria-label='New chat']")
+                    if new_chat_buttons and len(new_chat_buttons) > 0:
+                        print("Found existing chat interface")
+                    else:
+                        print("Starting new chat session")
+                        # Wait for chat interface to load if needed
+                        WebDriverWait(self.browser, 10).until(
+                            EC.presence_of_element_located((By.CSS_SELECTOR, "#copilot-chat-textarea"))
+                        )
+                except Exception as e:
+                    print(f"Error checking chat status: {e}")
+
+                # Get fresh reference to input field
                 input_field = WebDriverWait(self.browser, 15).until(
                     EC.presence_of_element_located((By.CSS_SELECTOR, "#copilot-chat-textarea"))
                 )
                 
-                # First ensure element is visible and interactable
+                # Ensure element is interactable
                 WebDriverWait(self.browser, 10).until(
                     EC.element_to_be_clickable((By.CSS_SELECTOR, "#copilot-chat-textarea"))
                 )
                 
-                # Clear existing text using multiple methods
+                # Clear existing text
                 input_field.clear()
                 self.browser.execute_script("arguments[0].value = '';", input_field)
-                time.sleep(0.5)
+                time.sleep(1)
                 
-                # Focus the element using JavaScript
+                # Focus the element
                 self.browser.execute_script("arguments[0].focus();", input_field)
-                time.sleep(0.5)
+                time.sleep(1)
                 
-                # Try multiple methods to input text
-                try:
-                    # Method 1: Direct send_keys
-                    input_field.send_keys(prompt)
-                except:
-                    try:
-                        # Method 2: JavaScript
-                        self.browser.execute_script(f"arguments[0].value = arguments[1];", input_field, prompt)
-                        # Trigger input event
-                        self.browser.execute_script("""
-                            var event = new Event('input', {
-                                bubbles: true,
-                                cancelable: true,
-                            });
-                            arguments[0].dispatchEvent(event);
-                        """, input_field)
-                    except:
-                        # Method 3: ActionChains
-                        actions = ActionChains(self.browser)
-                        actions.move_to_element(input_field)
-                        actions.click()
-                        actions.send_keys(prompt)
-                        actions.perform()
-                
-                time.sleep(0.5)
-                
+                # Send the entire prompt at once using JavaScript
+                self.browser.execute_script("""
+                    arguments[0].value = arguments[1];
+                    arguments[0].dispatchEvent(new Event('input', {
+                        bubbles: true,
+                        cancelable: true,
+                    }));
+                """, input_field, prompt)
+                time.sleep(1)
+
                 # Get initial response count
                 initial_responses = len(self.browser.find_elements(By.CSS_SELECTOR, ".markdown-body"))
                 
-                # Try to click send button first
+                # Click send button
                 try:
                     send_button = WebDriverWait(self.browser, 5).until(
                         EC.element_to_be_clickable((By.CSS_SELECTOR, "button[aria-label='Send message']"))
                     )
                     send_button.click()
-                except:
-                    # If button click fails, try Enter key
+                except Exception as e:
+                    print(f"Send button click failed, trying Enter key: {e}")
                     input_field.send_keys(Keys.RETURN)
                 
-                # Wait for response with better error handling
+                # Wait for response with improved handling
                 def response_complete(driver):
                     try:
                         current_responses = len(driver.find_elements(By.CSS_SELECTOR, ".markdown-body"))
@@ -386,7 +384,7 @@ class CopilotAutomation:
                 
                 # Wait up to 60 seconds for complete response
                 WebDriverWait(self.browser, 60).until(response_complete)
-                time.sleep(2)  # Additional wait for render
+                time.sleep(2)
                 
                 return True
                 
