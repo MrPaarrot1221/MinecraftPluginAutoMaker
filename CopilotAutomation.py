@@ -311,44 +311,30 @@ class CopilotAutomation:
         except Exception as e:
             print(f"Error waiting for page load: {e}")
             return False
+        
     def send_prompt_to_chat(self, input_field, prompt: str) -> bool:
         """Send a prompt to Copilot chat and wait for the complete response"""
         max_attempts = 3
         for attempt in range(max_attempts):
             try:
-                # First, check if we're in an existing chat or need to start a new one
-                try:
-                    # Look for the "New chat" button to determine if we're in an active chat
-                    new_chat_buttons = self.browser.find_elements(By.CSS_SELECTOR, "button[aria-label='New chat']")
-                    if new_chat_buttons and len(new_chat_buttons) > 0:
-                        print("Found existing chat interface")
-                    else:
-                        print("Starting new chat session")
-                        # Wait for chat interface to load if needed
-                        WebDriverWait(self.browser, 10).until(
-                            EC.presence_of_element_located((By.CSS_SELECTOR, "#copilot-chat-textarea"))
-                        )
-                except Exception as e:
-                    print(f"Error checking chat status: {e}")
-
-                # Get fresh reference to input field
+                # Refresh the input field element with extended wait time
                 input_field = WebDriverWait(self.browser, 15).until(
                     EC.presence_of_element_located((By.CSS_SELECTOR, "#copilot-chat-textarea"))
                 )
                 
-                # Ensure element is interactable
+                # Ensure element is visible and interactable
                 WebDriverWait(self.browser, 10).until(
                     EC.element_to_be_clickable((By.CSS_SELECTOR, "#copilot-chat-textarea"))
                 )
                 
-                # Clear existing text
+                # Clear existing text using multiple methods
                 input_field.clear()
                 self.browser.execute_script("arguments[0].value = '';", input_field)
-                time.sleep(1)
+                time.sleep(0.5)
                 
-                # Focus the element
+                # Focus the element using JavaScript
                 self.browser.execute_script("arguments[0].focus();", input_field)
-                time.sleep(1)
+                time.sleep(0.5)
                 
                 # Send the entire prompt at once using JavaScript
                 self.browser.execute_script("""
