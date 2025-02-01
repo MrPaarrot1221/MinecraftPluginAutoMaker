@@ -317,51 +317,76 @@ class CopilotAutomation:
         max_attempts = 3
         for attempt in range(max_attempts):
             try:
-                # Refresh the input field element
-                input_field = WebDriverWait(self.browser, 10).until(
+                # Refresh the input field element with extended wait time
+                input_field = WebDriverWait(self.browser, 15).until(
                     EC.presence_of_element_located((By.CSS_SELECTOR, "#copilot-chat-textarea"))
                 )
                 
-                # Clear existing text and set prompt
+                # First ensure element is visible and interactable
+                WebDriverWait(self.browser, 10).until(
+                    EC.element_to_be_clickable((By.CSS_SELECTOR, "#copilot-chat-textarea"))
+                )
+                
+                # Clear existing text using multiple methods
                 input_field.clear()
+                self.browser.execute_script("arguments[0].value = '';", input_field)
                 time.sleep(0.5)
                 
-                # Set the text using JavaScript for reliability
-                self.browser.execute_script("arguments[0].value = arguments[1];", input_field, prompt)
+                # Focus the element using JavaScript
+                self.browser.execute_script("arguments[0].focus();", input_field)
                 time.sleep(0.5)
                 
-                # Get initial response count before sending
+                # Try multiple methods to input text
+                try:
+                    # Method 1: Direct send_keys
+                    input_field.send_keys(prompt)
+                except:
+                    try:
+                        # Method 2: JavaScript
+                        self.browser.execute_script(f"arguments[0].value = arguments[1];", input_field, prompt)
+                        # Trigger input event
+                        self.browser.execute_script("""
+                            var event = new Event('input', {
+                                bubbles: true,
+                                cancelable: true,
+                            });
+                            arguments[0].dispatchEvent(event);
+                        """, input_field)
+                    except:
+                        # Method 3: ActionChains
+                        actions = ActionChains(self.browser)
+                        actions.move_to_element(input_field)
+                        actions.click()
+                        actions.send_keys(prompt)
+                        actions.perform()
+                
+                time.sleep(0.5)
+                
+                # Get initial response count
                 initial_responses = len(self.browser.find_elements(By.CSS_SELECTOR, ".markdown-body"))
                 
-                # Send the prompt
+                # Try to click send button first
                 try:
                     send_button = WebDriverWait(self.browser, 5).until(
                         EC.element_to_be_clickable((By.CSS_SELECTOR, "button[aria-label='Send message']"))
                     )
                     send_button.click()
                 except:
+                    # If button click fails, try Enter key
                     input_field.send_keys(Keys.RETURN)
                 
-                # Wait for response to start (loading indicator)
-                try:
-                    WebDriverWait(self.browser, 10).until(lambda driver: 
-                        len(driver.find_elements(By.CSS_SELECTOR, ".markdown-body")) > initial_responses or
-                        len(driver.find_elements(By.CSS_SELECTOR, ".copilot-loading")) > 0
-                    )
-                except:
-                    print("Warning: No immediate response indicators found")
-                
-                # Wait for response to complete
+                # Wait for response with better error handling
                 def response_complete(driver):
-                    current_responses = len(driver.find_elements(By.CSS_SELECTOR, ".markdown-body"))
-                    loading_elements = len(driver.find_elements(By.CSS_SELECTOR, ".copilot-loading"))
-                    return current_responses > initial_responses and loading_elements == 0
+                    try:
+                        current_responses = len(driver.find_elements(By.CSS_SELECTOR, ".markdown-body"))
+                        loading_elements = len(driver.find_elements(By.CSS_SELECTOR, ".copilot-loading"))
+                        return current_responses > initial_responses and loading_elements == 0
+                    except:
+                        return False
                 
-                # Wait up to 60 seconds for the complete response
+                # Wait up to 60 seconds for complete response
                 WebDriverWait(self.browser, 60).until(response_complete)
-                
-                # Additional wait to ensure full rendering
-                time.sleep(2)
+                time.sleep(2)  # Additional wait for render
                 
                 return True
                 
