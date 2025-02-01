@@ -398,6 +398,51 @@ class CopilotAutomation:
                     return False
         
         return False
+    
+    def ensure_single_chat_session(self):
+        """Ensure we're using a single chat session"""
+        try:
+            # Check if we have multiple chat windows open
+            chat_windows = self.browser.find_elements(By.CSS_SELECTOR, ".chat-window")  # Adjust selector as needed
+            
+            if len(chat_windows) > 1:
+                print("Multiple chat windows detected, consolidating...")
+                
+                # Click the first chat window to make it active
+                chat_windows[0].click()
+                time.sleep(1)
+                
+                # Look for any close buttons on other chat windows
+                close_buttons = self.browser.find_elements(By.CSS_SELECTOR, "button[aria-label='Close chat']")
+                for button in close_buttons[1:]:  # Skip the first one to keep one chat open
+                    try:
+                        button.click()
+                        time.sleep(0.5)
+                    except:
+                        continue
+                        
+            return True
+        except Exception as e:
+            print(f"Error managing chat sessions: {e}")
+            return False
+        
+    def process_prompt(self, prompt):
+        try:
+            # Ensure we're using a single chat session
+            self.ensure_single_chat_session()
+            
+            # Find chat input
+            input_field = self.find_chat_input()
+            if not input_field:
+                print("Could not find chat input")
+                return False
+                
+            # Send the prompt
+            return self.send_prompt_to_chat(input_field, prompt)
+            
+        except Exception as e:
+            print(f"Error processing prompt: {e}")
+            return False
 
     def handle_code_implementation(self, project_info: dict) -> bool:
         """Handle the code implementation response from Copilot"""
